@@ -1,4 +1,4 @@
-# splunk Ransomware Analysis
+# Ransomware Analysis
 
 -> Sourcetype="xmlwineventlog:microsoft-windows-sysmon/operational" EventCode=1 | eval cmdlen=len(CommandLine) | eventstats avg(cmdlen) as avg, stdev(cmdlen) as stdev by host | stats max(cmdlen) as maxlen, values(avg) as avgperhost, values(stdev) as stdevperhost by host, CommandLine | eval threshold = avgperhost + ( 4 * stdevperhost) | where maxlen > threshold
 
@@ -16,3 +16,13 @@
 - Sourcetype="xmlwineventlog:microsoft-windows-sysmon/operational" EventCode=1 | eval cmdlen=len(CommandLine) | eventstats avg(cmdlen) as avg, stdev(cmdlen) as stdev by host | stats max(cmdlen) as maxlen, values(avg) as avgperhost, values(stdev) as stdevperhost by host, CommandLine
 - Next using the eval command the threshold can be calculated for normal process
 - This should give out any processes whose command line cariables were 4 times the standard deviation of the normal processes in a particular host.
+
+# Vulnerability Detections
+
+Check windows update log:
+-> index=* (sourcetype="*wineventlog:system" OR sourcetype="winupdatelog") (KB12020 OR KB0303 ...) | stats latest(status) as laststatus by _time , dest, signature, signatue_id | search laststatus=installed
+
+- Open splunk security essentials for ransomeware app
+- Click on ransomware vunerabilities use case, scan enviroment for specific cve's
+- Data should show any vulnerable systems/endpoints from scans(from  eg nessus) in a particular time frame
+- Check if systems are patched from the universal forwarder with "monitor successful windows updates" feature
