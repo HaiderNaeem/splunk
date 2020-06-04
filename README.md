@@ -26,3 +26,30 @@ Check windows update log:
 - Click on ransomware vunerabilities use case, scan enviroment for specific cve's
 - Data should show any vulnerable systems/endpoints from scans(from  eg nessus) in a particular time frame
 - Check if systems are patched from the universal forwarder with "monitor successful windows updates" feature
+
+
+# Filtering web requests that issues a purchase action
+-> sourcetype=access_* status=200 action=purchase | top categoryId'
+
+# Users that issue a download event
+-> eventtype=”download” | bin _time span=1d as day | stats values(clientip) as ips dc(clientip) by day | streamstats dc(ips) as “Cumulative total”
+
+- Streamstats command, that calculates summary statistics on search results, diagnose attempts such user privilege escalation, or arp spoofing attacks.
+- Bin, breaks time into days
+- Stats command calculates the distinct users (clientip) and user count per day
+- Streamstats command finds the running distinct count of users
+
+# Analyse an arp spoofing attack
+
+-> source=/Users/logs/arp.csv MAC= AA:BB:CC:DD:00:00 | head 10 | streamstats current=false last(IP_ADDRESS) as new_ip_addr last (_time) as time_of_change by MAC | where IP_ADDRESS!=new_i p_addr | convert ctime(time_of_change) as time_of_change | rename IP_ADDR ESS as old_ip_addr | table time_of_change, MAC, old_ip_addr, new_ip_addr
+
+
+# ATM Fraud detection
+
+sourcetype=ATM action=withdrawal | transaction customer maxspan=15m | eval location_count=mvcount(location) | where location_count>1 | stats values(location) by customer
+
+- ATM withdrawals of funds, made by the same customer more than once in the last 15 minutes from two different cities.
+
+# Checking for stolen credit cards
+
+-> sourcetype=card_transactions -earliest=15m | stats min(amount) as min max(amount) as max by customer | where min<50 AND max>500|table min, max, customer
