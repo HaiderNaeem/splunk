@@ -40,23 +40,26 @@ Check windows update log:
 - smb traffic typically should not be allowed outside of firewall,
 - ransomeware usaully makes quesries on port 445/139 for smb or query external hosts on smb
 
--> sourcetype=XmlWinEventlog:Microsoft-Windows-Sysmon/Operational EventCode=3 Image=*.exe (dest_port=139 OR dest_port=445) | stats dc(DestinationIp) as "Destinations", values(DestinationIp) as "IPs" values(DestinationPort) as "DestPorts" by Image | rename Image as MaliciousProcess  
+-> index=* sourcetype=XmlWinEventlog:Microsoft-Windows-Sysmon/Operational EventCode=3 Image=*.exe (dest_port=139 OR dest_port=445) | stats dc(DestinationIp) as "Destinations", values(DestinationIp) as "IPs" values(DestinationPort) as "DestPorts" by Image | rename Image as MaliciousProcess  
 
 - To find the unusual executable making the smb queries windows sysmon logs can be used
 - Sysmon can capture network connections which are presented as Eventcode=3
 - Once again this can be used to filter out smb traffic going out of the user space
 
--> index= EventCode=1 Image="C:\\Users\\bob\\Desktop\\process.exe" 
+-> index*= EventCode=1 Image="C:\\Users\\bob\\Desktop\\process.exe" 
 
 - EventCode=1 with windows sysmon indicates a process start
 - Sysmon also hashes (sha1) the code of the process that starts with event code 1
 - Paste hash on VirusTotal
 
--> host=pcName sourcetype="stream:dns" "query_type{}"=PTR | spath="hostname{}" | search ("hostname{}"="*" AND "hostname{}"!="*.local" AND "hostname{}" !="*.arpa") | stats count by hostname{},name{} | rename hostname{} as domain, name{} as IP | eval list = "iana" | 'ut_parse(domain,list)' | dedup ut_domain | lookup alexa-1m.csv domain as ut_domain | lookup cdn.csv domain as ut_domain | search NOT cdn_provider="*" | regex rank!="\d+" | iplocation IP | fields IP, ut_domain,rank, count, Country | sort - Count 
+-> index=* host=pcName sourcetype="stream:dns" "query_type{}"=PTR | spath="hostname{}" | search ("hostname{}"="*" AND "hostname{}"!="*.local" AND "hostname{}" !="*.arpa") | stats count by hostname{},name{} | rename hostname{} as domain, name{} as IP | eval list = "iana" | 'ut_parse(domain,list)' | dedup ut_domain | lookup alexa-1m.csv domain as ut_domain | lookup cdn.csv domain as ut_domain | search NOT cdn_provider="*" | regex rank!="\d+" | iplocation IP | fields IP, ut_domain,rank, count, Country | sort - Count 
 
 - Lookup if the endpoints are connecting to proper domains
 - ptr queries do reverse lookups for ip addresses
 - popular domain are found in alexa 1million
+
+# Finding processes that are communicating on port 80 with MS Sysmon
+->index=* sourcetype=XmlWinEventlog:Microsoft-Windows-Sysmon/Operational EventCode=3 dest_port=80 | stats sparkline count by Image,DestinationIp | sort -count | iplocation DestinationIp 
 
 # Filtering web requests that issues a purchase action
 -> sourcetype=access_* status=200 action=purchase | top categoryId'
