@@ -27,6 +27,36 @@ Check windows update log:
 - Data should show any vulnerable systems/endpoints from scans(from  eg nessus) in a particular time frame
 - Check if systems are patched from the universal forwarder with "monitor successful windows updates" feature
 
+# Unusual Traffic: TOR, SMB, DNS QUERIES, HTTP
+-> index=* (( tag=network tag=communicate) OR (sourcetype=pan*traffic OR sourcetype=opsec OR sourcetype=cisco:asa OR sourcetype=stream* )) app=tor src=ip* | table _time src_ip src_port dest_ip dest_port bytes app
+
+- splunk security essentials app -> network features
+- ransome usually uses TOR 
+- looks for the network traffic data in splunk
+- creating a splunk search for endpoint talking to different countries can also indicate the presence of tor
+
+-> index=* (( tag=network tag=communicate) OR (sourcetype=pan*traffic OR sourcetype=opsec OR sourcetype=cisco:asa OR sourcetype=stream* )) action=allowed (app=smb OR dest_port=139 OR dest_port=445) | bucket _time span=id | stats count by _time src_ip dest_ip dest_port
+
+- smb traffic typically should not be allowed outside of firewall,
+- ransomeware usaully makes quesries on port 445/139 for smb or query external hosts on smb
+
+-> sourcetype=XmlWinEventlog:Microsoft-Windows-Sysmon/Operational EventCode=3 Image=*.exe (dest_port=139 OR dest_port=445) | stats dc(DestinationIp) as "Destinations", values(DestinationIp) as "IPs" values(DestinationPort) as "DestPorts" by Image | rename Image as MaliciousProcess  
+
+- To find the unusual executable making the smb queries windows sysmon logs can be used
+- Sysmon can capture network connections which are presented as Eventcode=3
+- Once again this can be used to filter out smb traffic going out of the user space
+
+-> index= EventCode=1 Image="C:\\Users\\bob\\Desktop\\process.exe" 
+
+- EventCode=1 with windows sysmon indicates a process start
+- Sysmon also hashes (sha1) the code of the process that starts with event code 1
+- Paste hash on VirusTotal
+
+-> host=pcName sourcetype="stream:dns" "query_type{}"=PTR | spath="hostname{}" | search ("hostname{}"="*" AND "hostname{}"!="*.local" AND "hostname{}" !="*.arpa") | stats count by hostname{},name{} | rename hostname{} as domain, name{} as IP | eval list = "iana" | 'ut_parse(domain,list)' | dedup ut_domain | lookup alexa-1m.csv domain as ut_domain | lookup cdn.csv domain as ut_domain | search NOT cdn_provider="*" | regex rank!="\d+" | iplocation IP | fields IP, ut_domain,rank, count, Country | sort - Count 
+
+- Lookup if the endpoints are connecting to proper domains
+- ptr queries do reverse lookups for ip addresses
+- popular domain are found in alexa 1million
 
 # Filtering web requests that issues a purchase action
 -> sourcetype=access_* status=200 action=purchase | top categoryId'
