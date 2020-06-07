@@ -64,6 +64,17 @@ Check windows update log:
 # Filtering web requests that issues a purchase action
 -> sourcetype=access_* status=200 action=purchase | top categoryId'
 
+# Analysing windows registry data
+-> index=* sourcetype=WinRegistry process_image="*AppData\\*" key_path="*currentversion\\run*" | table _time, host, process_image, key_path,
+| sort _time
+
+- Splunk Security Essentials for Ransomeware -> Monitor Autorun registry keys 
+- Report changes to specific registry keys, from sysmon
+- Malware remains persistant if the keys have been altered by it, even after reboot
+- When an executable is called it adds additional info to a key path with a run key path before it, HKLM\...\...\run\maliciousProcPath
+- The maliciousProcPath can be search within splunk, to see where else the pattern appeared (sourcetypes), which may show the malware associated with the path
+- Can also see if the path started any process executions with the event code 1 and command line
+
 # Users that issue a download event
 -> eventtype=”download” | bin _time span=1d as day | stats values(clientip) as ips dc(clientip) by day | streamstats dc(ips) as “Cumulative total”
 
