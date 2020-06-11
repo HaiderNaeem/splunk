@@ -83,6 +83,29 @@ Check windows update log:
 - Stats command calculates the distinct users (clientip) and user count per day
 - Streamstats command finds the running distinct count of users
 
+# Windows Event Logs
+-> | inputlookup UC_windows_event_log | search ((sourcetype=wineventlog:security OR XmlWinEventlog:Security) AND (EventCode=1102 OR EventCode=1100) OR ((sourcetype=wineventlog:system OR XmlWinEventlog:System) AND EventCode=104) | table _time EventCode Message sourcetype host
+
+3 major logs, security, system and application
+- windows log cheat cheet malwarearchealogy and .conf2015
+- app , splunk security essential -> envent logs
+- searching for event codes that indicates suspicious processes clearing event logs
+ 
+ # Find new services installed in system that auto start , with event 7045 
+-> index=* EventCode=7045 Service_Start_Type="auto start" | table _time, ComputerName, Service*
+
+# Looking for vssadmin activity calls by processes to clear local system restore points
+-> index=* sourcetype=wineventlog:security EventCode=4688 New_Process_Name!="C\\Windows*" [search index=* sourcetype=wineventlog:security (cmd.exe AND *vssadmin*) EventCode=4688 | dedup Creator _Process_ID | fields New_Process_ID ] | table _time, PCName, _Porcess, _Name, Process_Command_Line <- may have to manually enable this field
+
+# underlying changes in the windows disk directory
+-> index=* EventCode=4663 Accesses="WriteData (or Addfile)" Object_Name="*.exe" Process_Name="*AppData*" | table Account_Domain, Account_Name.Proecess_Name, Accesses, Object_Name
+
+# Processes from user directories with large amount of entropy 
+-> index=* sourcetype="WinEventLog:Security" EventCode=4688 New_Process_Name="C:\\Users*" | `ut_shannon(New_Process_Name)` | stats values(ut_shannon) as "Shannon Entropy Score" by New_Process_Name, host | rename New_Process_Name as Process_Name, Host as Endpoint | sort -"Shannon Entropy Score"
+
+# Task scheduler event calling and creating a task only to run once
+-> index=* sourcetype="wineventlog:security" schtasks.exe once | table host,New_ProcessName, Process_Command_Line, memeber_id
+
 # Analyse an arp spoofing attack
 
 -> source=/Users/logs/arp.csv MAC= AA:BB:CC:DD:00:00 | head 10 | streamstats current=false last(IP_ADDRESS) as new_ip_addr last (_time) as time_of_change by MAC | where IP_ADDRESS!=new_i p_addr | convert ctime(time_of_change) as time_of_change | rename IP_ADDR ESS as old_ip_addr | table time_of_change, MAC, old_ip_addr, new_ip_addr
