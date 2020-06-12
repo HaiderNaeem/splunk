@@ -97,7 +97,9 @@ Check windows update log:
 # Looking for vssadmin activity calls by processes to clear local system restore points
 -> index=* sourcetype=wineventlog:security EventCode=4688 New_Process_Name!="C\\Windows*" [search index=* sourcetype=wineventlog:security (cmd.exe AND *vssadmin*) EventCode=4688 | dedup Creator _Process_ID | fields New_Process_ID ] | table _time, PCName, _Porcess, _Name, Process_Command_Line <- may have to manually enable this field
 
-# underlying changes in the windows disk directory
+- [] indicates a subsearch, which will run first and then connect the result to the main search
+
+# Underlying changes in the windows disk directory
 -> index=* EventCode=4663 Accesses="WriteData (or Addfile)" Object_Name="*.exe" Process_Name="*AppData*" | table Account_Domain, Account_Name.Proecess_Name, Accesses, Object_Name
 
 # Processes from user directories with large amount of entropy 
@@ -107,9 +109,27 @@ Check windows update log:
 -> index=* sourcetype="wineventlog:security" schtasks.exe once | table host,New_ProcessName, Process_Command_Line, memeber_id
 
 # Analyse an arp spoofing attack
-
 -> source=/Users/logs/arp.csv MAC= AA:BB:CC:DD:00:00 | head 10 | streamstats current=false last(IP_ADDRESS) as new_ip_addr last (_time) as time_of_change by MAC | where IP_ADDRESS!=new_i p_addr | convert ctime(time_of_change) as time_of_change | rename IP_ADDR ESS as old_ip_addr | table time_of_change, MAC, old_ip_addr, new_ip_addr
 
+# Analysis with MS Sysmon
+Malware usually replicates legit ms processes name but may not run in the proper directory/disk
+-> index=* (sourcetype=min*security EventCide=4688 New_Process_Name!=*Windows\\System32* New_Process_Name!=*Windows\\SysWOW64*) OR (sourcetyoe=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational EventCode=1 Image!=*Windows\\System32* Image!=*Windows\\SysWOW64*) | eval process=coalesce(Image, New_Process_Name) | rex field=process .*\\\(?<filename>\S+)\s?$ | lookup isWindowsSystemFile_lookup filename | search systemFile=true | table _time dest host user process
+ 
+# Sysmon example of malicious executable manupilating file system executables
+-> index=* sourcetype="xmlwineventlog:microsoft-windows-sysmon/operational" EventCode=1 (attrib* OR icacls*) | _time,User,Computer,EXEDirectory,CommandLine
+
+# Finding spoofed preocesses with sysmon using tstat cmmand
+-> | tstats count FROM datamodel=Application_State.All_Application_State WHERE (All_Application_State.process!="C:\\Windows\\System32*" AND All_Application_State.process!="C:\\Windows\\SysWOW64*") BY _time,host, All_Application_State.process, All_Application_State.user | rex field=process .*\\\(?<filename>\S*)\s?$ | lookup windowsSystemFiles.csv filename | search isWindowsSystemFile=1 
+
+# Porgram like MsOffice launching an executable
+-> index=* sourcetype=xmlwineventlog:microsoft-windows-sysmon/operational EventDescription="Process Create" (vbs OR *.exe) [search index=* source=sourcetype="xmlwineventlog:microsoft-windows-sysmon/operational" (WINWORD OR EXCEL) EventDescription="Process Create" | dedup ProcessGuid | rename ProcessGuid as ParentProcessGuid | fields ParentProcessGuid ] | table _time,host,ProcessGuid,ParentProcessGuid,Image,ParentImage
+
+# Show Parent/Child relationship for vssadmin activity
+-> index=* EventCode=1 sourcetype="xmlwineventlog:microsoft-windows-sysmon/operational" vssadmin | stats values(PercentImage) as Parent_Process, Values(Image) as Current_Process,values(CommandLine) as Current_Command_Line by _time,host,user
+
+# Malicious Process modifying more than a 100 files per minute
+-> index=* sourcetype=xmlwineventlog:microsoft-windows-sysmon/operational EventCode=1 (Image!="C:\\Windows*" Image=*.exe Image!="C:\\Program Files*") [search index=* host=* sourcetype=xmlwineventlog:microsoft-windows-sysmon/operational | streamstats time_windows=1m count as "new_files" by host | search new_files>100 | fields Image] | table host, Image, sha1 | dedup sha1
+- provided the process is found, research the exe hash in virustotal
 
 # ATM Fraud detection
 
