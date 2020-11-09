@@ -15,7 +15,7 @@
 - To summarize the data in tabular format the stats command can be used
 - Sourcetype="xmlwineventlog:microsoft-windows-sysmon/operational" EventCode=1 | eval cmdlen=len(CommandLine) | eventstats avg(cmdlen) as avg, stdev(cmdlen) as stdev by host | stats max(cmdlen) as maxlen, values(avg) as avgperhost, values(stdev) as stdevperhost by host, CommandLine
 - Next using the eval command the threshold can be calculated for normal process
-- This should give out any processes whose command line cariables were 4 times the standard deviation of the normal processes in a particular host.
+- This should give out any processes whose command line variables were 4 times the standard deviation of the normal processes in a particular host.
 
 # Vulnerability Detections
 
@@ -31,9 +31,9 @@ Check windows update log:
 -> index=* (( tag=network tag=communicate) OR (sourcetype=pan*traffic OR sourcetype=opsec OR sourcetype=cisco:asa OR sourcetype=stream* )) app=tor src=ip* | table _time src_ip src_port dest_ip dest_port bytes app
 
 - splunk security essentials app -> network features
-- ransome usually uses TOR 
+- ransomeware usually uses TOR 
 - looks for the network traffic data in splunk
-- creating a splunk search for endpoint talking to different countries can also indicate the presence of tor
+- creating a splunk search function for endpoint talking across different countries can also indicate the presence of tor
 
 -> index=* (( tag=network tag=communicate) OR (sourcetype=pan*traffic OR sourcetype=opsec OR sourcetype=cisco:asa OR sourcetype=stream* )) action=allowed (app=smb OR dest_port=139 OR dest_port=445) | bucket _time span=id | stats count by _time src_ip dest_ip dest_port
 
